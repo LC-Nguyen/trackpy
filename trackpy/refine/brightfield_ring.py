@@ -160,7 +160,7 @@ def _min_edge(arr, threshold=0.45, max_dev=1, axis=1, bright_left=True,
     if axis == 0:
         arr = arr.T
     if np.issubdtype(arr.dtype, np.unsignedinteger):
-        arr = arr.astype(np.int)
+        arr = arr.astype(int)
 
     values = np.nanmin(arr, axis=1)
     rdev = []
@@ -308,7 +308,7 @@ def _unwrap_ellipse(image, params, rad_range, num_points=None, spline_order=4,
              pos[:, :, np.newaxis]
     # interpolate the image on computed coordinates
     intensity = map_coordinates(image, coords, order=spline_order,
-                                output=np.float, mode='constant',
+                                output=float, mode='constant',
                                 cval=fill_value)
     return intensity, pos, normal
 

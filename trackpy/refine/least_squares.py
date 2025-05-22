@@ -427,7 +427,7 @@ def prepare_subimage(coords, image, radius):
     # to mask the image
     mask_total = np.any(dist, axis=0).T
     # to mask the masked image
-    masks_singles = np.empty((len(coords), mask_total.sum()), dtype=np.bool)
+    masks_singles = np.empty((len(coords), mask_total.sum()), dtype=bool)
     for i, _dist in enumerate(dist):
         masks_singles[i] = _dist.T[mask_total]
 
@@ -1249,7 +1249,7 @@ def _wrap_constraints(constraints, params_const, modes, groups=None):
         return []
 
     if groups is not None:
-        cl_sizes = np.array([len(g) for g in groups[0]], dtype=np.int)
+        cl_sizes = np.array([len(g) for g in groups[0]], dtype=int)
 
     result = []
     for cons in constraints:
