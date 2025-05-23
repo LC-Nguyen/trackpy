@@ -10,9 +10,10 @@ from ..utils import (validate_tuple, guess_pos_columns, default_pos_columns,
 from ..masks import (binary_mask, r_squared_mask,
                      x_squared_masks, cosmask, sinmask, theta_mask)
 
+from ..try_numba import NUMBA_AVAILABLE, int, round
+
 from skimage.measure import moments_central
 
-from ..try_numba import NUMBA_AVAILABLE, range, int, round
 
 logger = logging.getLogger(__name__)
 
