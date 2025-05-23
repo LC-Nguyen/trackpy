@@ -27,7 +27,7 @@ setup_parameters = dict(
     url = "https://github.com/soft-matter/trackpy",
     install_requires = ['numpy>=1.18', 'scipy>=1.4', 'pandas>=1', 'pyyaml', 'matplotlib', "looseversion>=1.0.1"],
     extras_require={"test": "pytest"},
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     classifiers=[
         "Programming Language :: Python :: 3",
     ],

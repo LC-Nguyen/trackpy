@@ -1,23 +1,24 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-import six
-from six.moves import range
 import itertools
 import functools
 
 import numpy as np
 import pandas as pd
+from scipy.spatial import cKDTree
 
 from .utils import points_to_arr
-from ..utils import default_pos_columns, cKDTree
+from ..utils import default_pos_columns
 
 try:
     from sklearn.neighbors import BallTree
+    try:
+        from sklearn.metrics import DistanceMetric
+    except ImportError:
+        from sklearn.neighbors import DistanceMetric
 except ImportError:
     BallTree = None
 
 
-class HashBase(object):
+class HashBase:
     """ Base for classes that efficiently find features near a point. """
     def __init__(self, points, ndim):
         """Takes a list of particles."""
@@ -51,14 +52,7 @@ class HashBase(object):
         """Predict and convert points to an array."""
         if self.predictor is None:
             return points_to_arr(points)
-        try:
-            for p in points:
-                p.pos = p.pos[::-1]
-            result = np.array(list(self.predictor(self.t, points)))
-        finally:
-            for p in points:  # swap axes order back
-                p.pos = p.pos[::-1]
-        return result[:, ::-1]
+        return np.array(list(self.predictor(self.t, points)))
 
     @property
     def coords(self):
@@ -98,7 +92,7 @@ class HashKDTree(HashBase):
         if dist_func is not None:
             raise ValueError("For custom distance functions please use "
                              "the 'BTree' neighbor_strategy.")
-        super(HashKDTree, self).__init__(points, ndim)
+        super().__init__(points, ndim)
         if to_eucl is None:
             self.to_eucl = lambda x: x
         else:
@@ -150,7 +144,7 @@ class HashKDTree(HashBase):
         if rescale:
             pos = self.to_eucl(pos)
         found = self.tree.query_ball_point(pos, search_range)
-        found = set([i for sl in found for i in sl])  # ravel
+        found = {i for sl in found for i in sl}  # ravel
         if len(found) == 0:
             return
         else:
@@ -164,7 +158,7 @@ class HashBTree(HashBase):
         if BallTree is None:
             raise ImportError("Scikit-learn (sklearn) is required "
                               "for using the 'BTree' neighbor_strategy.")
-        super(HashBTree, self).__init__(points, ndim)
+        super().__init__(points, ndim)
         if to_eucl is None:
             self.to_eucl = lambda x: x
         else:
@@ -198,8 +192,12 @@ class HashBTree(HashBase):
             if self.dist_func is None:
                 self._btree = BallTree(coords_mapped)
             else:
-                self._btree = BallTree(coords_mapped,
-                                       metric='pyfunc', func=self.dist_func)
+                if isinstance(self.dist_func, DistanceMetric):
+                    self._btree = BallTree(coords_mapped,
+                                           metric=self.dist_func)
+                else:
+                    self._btree = BallTree(coords_mapped,
+                                           metric='pyfunc', func=self.dist_func)
         # This could be tuned
         self._clean = True
 
@@ -299,7 +297,7 @@ def split_subnet(source, dest, new_range):
     return (subnets[key] for key in subnets)
 
 
-class Subnets(object):
+class Subnets:
     """ Class that identifies the possible links between two groups of features.
 
     Candidates and subnet indices are stored inside the Point objects that are

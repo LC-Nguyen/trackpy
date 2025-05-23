@@ -1,3 +1,27 @@
+v0.6.4
+------
+
+trackpy v0.6.4 is a minor compatibility update for numpy v2.0
+
+Dependencies
+~~~~~~~~~~~~
+- Adds support for numpy 2.0 (@nkeim, #770). Note that as of this writing,
+  pytables (an optional dependency for trackpy) does not yet support
+  numpy 2.0 (see https://github.com/PyTables/PyTables/issues/1172 and 
+  #768).
+
+
+v0.6.3
+------
+
+trackpy v0.6.3 is a minor compatibility update for newer Pandas verisons.
+
+Dependencies
+~~~~~~~~~~~~
+- Improves support for latest Pandas in emsd function (@hz-xiaxz, #758)
+- Fix deprecated matplotlib usage in 3D plotting (@jacopoabramo, #767)
+
+
 v0.6.2
 ------
 

@@ -1,7 +1,3 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-import six
-from six.moves import range, zip
 import warnings
 import logging
 import itertools, functools
@@ -57,9 +53,11 @@ def link_iter(coords_iter, search_range, **kwargs):
         algorithm used to resolve subnetworks of nearby particles
         'auto' uses hybrid (numba+recursive) if available
         'drop' causes particles in subnetworks to go unlinked
-    dist_func : function, optional
-        a custom distance function that takes two 1D arrays of coordinates and
-        returns a float. Must be used with the 'BTree' neighbor_strategy.
+    dist_func : function or ```sklearn.metrics.DistanceMetric``` instance, optional
+        A custom python distance function or instance of the 
+        Scikit Learn DistanceMetric class. If a python distance function is 
+        passed, it must take two 1D arrays of coordinates and return a float. 
+        Must be used with the 'BTree' neighbor_strategy.
     to_eucl : function, optional
         function that transforms a N x ndim array of positions into coordinates
         in Euclidean space. Useful for instance to link by Euclidean distance
@@ -102,7 +100,7 @@ def link_iter(coords_iter, search_range, **kwargs):
 
     for t, coords in coords_iter:
         linker.next_level(coords, t)
-        logger.info("Frame {0}: {1} trajectories present.".format(t, len(linker.particle_ids)))
+        logger.info("Frame {}: {} trajectories present.".format(t, len(linker.particle_ids)))
         yield t, linker.particle_ids
 
 
@@ -148,9 +146,11 @@ def link(f, search_range, pos_columns=None, t_column='frame', **kwargs):
         algorithm used to resolve subnetworks of nearby particles
         'auto' uses hybrid (numba+recursive) if available
         'drop' causes particles in subnetworks to go unlinked
-    dist_func : function, optional
-        a custom distance function that takes two 1D arrays of coordinates and
-        returns a float. Must be used with the 'BTree' neighbor_strategy.
+    dist_func : function or ```sklearn.metrics.DistanceMetric``` instance, optional
+        A custom python distance function or instance of the 
+        Scikit Learn DistanceMetric class. If a python distance function is 
+        passed, it must take two 1D arrays of coordinates and return a float. 
+        Must be used with the 'BTree' neighbor_strategy.
     to_eucl : function, optional
         function that transforms a N x ndim array of positions into coordinates
         in Euclidean space. Useful for instance to link by Euclidean distance
@@ -181,9 +181,9 @@ def link(f, search_range, pos_columns=None, t_column='frame', **kwargs):
 
     # copy the dataframe
     f = f.copy()
-    # coerce t_column to integer type
+    # coerce t_column to integer type (use np.int64 to avoid 32-bit on windows)
     if not np.issubdtype(f[t_column].dtype, np.integer):
-        f[t_column] = f[t_column].astype(np.integer)
+        f[t_column] = f[t_column].astype(np.int64)
     # sort on the t_column
     pandas_sort(f, t_column, inplace=True)
 
@@ -244,9 +244,11 @@ def link_df_iter(f_iter, search_range, pos_columns=None,
         algorithm used to resolve subnetworks of nearby particles
         'auto' uses hybrid (numba+recursive) if available
         'drop' causes particles in subnetworks to go unlinked
-    dist_func : function, optional
-        a custom distance function that takes two 1D arrays of coordinates and
-        returns a float. Must be used with the 'BTree' neighbor_strategy.
+    dist_func : function or ```sklearn.metrics.DistanceMetric``` instance, optional
+        A custom python distance function or instance of the 
+        Scikit Learn DistanceMetric class. If a python distance function is 
+        passed, it must take two 1D arrays of coordinates and return a float. 
+        Must be used with the 'BTree' neighbor_strategy.
     to_eucl : function, optional
         function that transforms a N x ndim array of positions into coordinates
         in Euclidean space. Useful for instance to link by Euclidean distance
@@ -307,14 +309,7 @@ def adaptive_link_wrap(source_set, dest_set, search_range, subnet_linker,
     return sn_spl, sn_dpl
 
 
-def _sort_key_spl_dpl(x):
-    if x[0] is not None:
-        return list(x[0].pos)
-    else:
-        return list(x[1].pos)
-
-
-class Linker(object):
+class Linker:
     """Linker class that sequentially links ndarrays of coordinates together.
 
     The class can be used via the `init_level` and `next_level` methods.
@@ -536,7 +531,7 @@ class Linker(object):
 
     def apply_links(self, spl, dpl):
         new_mem_set = set()
-        for sp, dp in sorted(zip(spl, dpl), key=_sort_key_spl_dpl):
+        for sp, dp in zip(spl, dpl):
             # Do linking
             if sp is not None and dp is not None:
                 sp.track.add_point(dp)

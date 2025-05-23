@@ -1,10 +1,6 @@
 """These functions generate handy plots."""
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-import six
-from six.moves import zip
-from itertools import tee
 from collections.abc import Iterable
+from itertools import tee
 from functools import wraps
 import warnings
 import logging
@@ -43,7 +39,8 @@ def make_axes(func):
         import matplotlib.pyplot as plt
         if kwargs.get('ax') is None:
             kwargs['ax'] = plt.gca()
-            show_plot = True
+            # show plot unless the matplotlib backend is headless
+            show_plot = (plt.get_backend() != "agg")
         else:
             show_plot = False
 
@@ -83,7 +80,7 @@ def make_axes3d(func):
         if kwargs.get('ax') is None:
             if not hasattr(plt.gca(), 'zaxis'):
                 plt.figure()  # initialize new Fig when current axis is not 3d
-            kwargs['ax'] = plt.gca(projection='3d')
+            kwargs['ax'] = plt.subplot(projection='3d')
             show_plot = True
         else:
             if not hasattr(plt.gca(), 'zaxis'):
@@ -356,7 +353,7 @@ def plot_traj(traj, colorby='particle', mpp=None, label=False,
     if label:
         unstacked = traj.set_index([t_column, 'particle'])[pos_columns].unstack()
         first_frame = int(traj[t_column].min())
-        coords = unstacked.bfill().stack(future_stack=True).loc[first_frame]
+        coords = unstacked.bfill().stack().loc[first_frame]
         for particle_id, coord in coords.iterrows():
             ax.text(*coord.tolist(), s="%d" % particle_id,
                     horizontalalignment='center',
@@ -476,13 +473,13 @@ def annotate(centroids, image, circle_size=None, color=None,
 
     if color is None:
         color = ['r']
-    if isinstance(color, six.string_types):
+    if isinstance(color, str):
         color = [color]
     if not isinstance(split_thresh, Iterable):
         split_thresh = [split_thresh]
 
     # The parameter image can be an image object or a filename.
-    if isinstance(image, six.string_types):
+    if isinstance(image, str):
         image = plt.imread(image)
     if invert:
         ax.imshow(1-image, **_imshow_style)

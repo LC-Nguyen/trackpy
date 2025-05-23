@@ -1,15 +1,12 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-import six
 import logging
-import collections.abc as collections
 import functools
 import re
 import sys
 import warnings
-from contextlib import contextmanager
+from collections.abc import Hashable
 from datetime import datetime, timedelta
-from distutils.version import LooseVersion
+from looseversion import LooseVersion
+from multiprocessing.pool import Pool
 
 import pandas as pd
 import numpy as np
@@ -19,50 +16,26 @@ import yaml
 
 import trackpy
 
-# Set is_pandas_since_016 for use elsewhere.
-# Pandas >= 0.16.0 lets us check if a DataFrame is a view.
-try:
-    is_pandas_since_016 = (LooseVersion(pd.__version__) >=
-                           LooseVersion('0.16.0'))
-except ValueError:  # Probably a development version
-    is_pandas_since_016 = True
 
-try:
-    is_pandas_since_017 = (LooseVersion(pd.__version__) >=
-                           LooseVersion('0.17.0'))
-except ValueError:  # Probably a development version
-    is_pandas_since_017 = True
-
-try:
-    is_pandas_since_018 = (LooseVersion(pd.__version__) >=
-                           LooseVersion('0.18.0'))
-except ValueError:  # Probably a development version
-    is_pandas_since_018 = True
 try:
     is_pandas_since_023 = (LooseVersion(pd.__version__) >=
                            LooseVersion('0.23.0'))
 except ValueError:  # Probably a development version
     is_pandas_since_023 = True
 
-# Wrap the scipy cKDTree to work around a bug in scipy 0.18.0
-try:
-    is_scipy_018 = LooseVersion(scipy.__version__) == LooseVersion('0.18.0')
-except ValueError:  # Probably a development version
-    is_scipy_018 = False
-
-
-if is_scipy_018:
-    from scipy.spatial import KDTree as cKDTree
-    warnings.warn("Due to a bug in Scipy 0.18.0, the (faster) cKDTree cannot "
-                  "be used. For better linking performance, upgrade or "
-                  "downgrade scipy.")
-else:
-    from scipy.spatial import cKDTree
 
 try:
-    is_scipy_since_100 = LooseVersion(scipy.__version__) >= LooseVersion('1.0.0')
+    is_pandas_since_220 = (LooseVersion(pd.__version__) >=
+                           LooseVersion('2.2.0'))
 except ValueError:  # Probably a development version
-    is_scipy_since_100 = True
+    is_pandas_since_220 = True
+
+
+# Emit warnings in refine.least_squares for scipy 1.5
+try:
+    is_scipy_15 = LooseVersion("1.5.0") <= LooseVersion(scipy.__version__) < LooseVersion('1.6.0')
+except ValueError:  # Probably a development version
+    is_scipy_15 = False
 
 
 def fit_powerlaw(data, plot=True, **kwargs):
@@ -85,7 +58,7 @@ def fit_powerlaw(data, plot=True, **kwargs):
     return values
 
 
-class memo(object):
+class memo:
     """Decorator. Caches a function's return value each time it is called.
     If called later with the same arguments, the cached value is returned
     (not reevaluated).
@@ -96,7 +69,7 @@ class memo(object):
         functools.update_wrapper(self, func)
 
     def __call__(self, *args):
-        if not isinstance(args, collections.Hashable):
+        if not isinstance(args, Hashable):
             # uncacheable. a list, for instance.
             warnings.warn("A memoization cache is being used on an uncacheable " +
                           "object. Proceeding by bypassing the cache.",
@@ -181,7 +154,7 @@ HH:MM:SS, H:MM:SS, MM:SS, and M:SS all OK.
     if not isinstance(partial_timestamp, str):
         # might be NaN or other unprocessable entry
         return partial_timestamp
-    input_format = '\d?\d?:?\d?\d:\d\d'
+    input_format = r'\d?\d?:?\d?\d:\d\d'
     if not re.match(input_format, partial_timestamp):
         raise ValueError("Input string cannot be regularized.")
     partial_digits = list(partial_timestamp)
@@ -232,7 +205,7 @@ def validate_tuple(value, ndim):
 
 
 try:
-    from IPython.core.display import clear_output
+    from IPython.display import clear_output
 except ImportError:
     pass
 
@@ -308,11 +281,8 @@ def quiet(suppress=True):
     else:
         trackpy.logger.setLevel(logging.INFO)
 
-def _pandas_sort_pre_017(df, by, *args, **kwargs):
-    """Use sort() to sort a DataFrame"""
-    return df.sort(*args, columns=by, **kwargs)
 
-def _pandas_sort_post_017(df, by, *args, **kwargs):
+def pandas_sort(df, by, *args, **kwargs):
     """
     Use sort_values() to sort a DataFrame
     This raises a ValueError if the given value is both
@@ -325,39 +295,6 @@ def _pandas_sort_post_017(df, by, *args, **kwargs):
     if df.index.name is not None and df.index.name in by:
         df.index.name += '_index'
     return df.sort_values(*args, by=by, **kwargs)
-
-if is_pandas_since_017:
-    pandas_sort = _pandas_sort_post_017
-else:
-    pandas_sort = _pandas_sort_pre_017
-
-def _pandas_iloc_pre_016(df, inds):
-    """Workaround for bug, iloc with empty list, in pandas < 0.16"""
-    if len(inds) > 0:
-        return df.iloc[inds]
-    else:
-        return df.iloc[:0]
-
-def _pandas_iloc_since_016(df, inds):
-    return df.iloc[inds]
-
-if is_pandas_since_016:
-    pandas_iloc = _pandas_iloc_since_016
-else:
-    pandas_iloc = _pandas_iloc_pre_016
-
-def _pandas_rolling_pre_018(df, window, *args, **kwargs):
-    """Use rolling_mean() to compute a rolling average"""
-    return pd.rolling_mean(df, window, *args, **kwargs)
-
-def _pandas_rolling_since_018(df, window, *args, **kwargs):
-    """Use rolling() to compute a rolling average"""
-    return df.rolling(window, *args, **kwargs).mean()
-
-if is_pandas_since_018:
-    pandas_rolling = _pandas_rolling_since_018
-else:
-    pandas_rolling = _pandas_rolling_pre_018
 
 
 def _pandas_concat_post_023(*args, **kwargs):
@@ -385,7 +322,7 @@ def default_pos_columns(ndim):
     if ndim < 4:
         return ['z', 'y', 'x'][-ndim:]
     else:
-        return map(lambda i: 'x' + str(i), range(ndim))
+        return list(map(lambda i: 'x' + str(i), range(ndim)))
 
 
 def default_size_columns(ndim, isotropic):
@@ -404,7 +341,7 @@ def is_isotropic(value):
         return True
 
 
-class ReaderCached(object):
+class ReaderCached:
     """ Simple wrapper that provides cacheing of image readers """
     def __init__(self, reader):
         self.reader = reader
@@ -451,3 +388,51 @@ def safe_exp(arr):
         mask = arr > EXPONENT_EPS_FLOAT64
     result[mask] = np.exp(arr[mask])
     return result
+
+def get_pool(processes):
+    """Returns the appropriate pool and map functions if multiprocessing needs
+    to be used, otherwise None, map.
+
+    Parameters
+    ----------
+    processes : integer or "auto"
+        The number of processes to use in parallel. If <= 1, multiprocessing is
+        disabled. If "auto", the number returned by `os.cpu_count()`` is used.
+
+    Returns
+    -------
+    pool, map_func
+
+    See Also
+    --------
+    batch
+    """
+    # Handle & validate argument `processes`
+    if processes == "auto":
+        processes = None  # Is replaced with `os.cpu_count` in Pool
+    elif not isinstance(processes, int):
+        raise TypeError("`processes` must either be an integer or 'auto', "
+                        "was type {}".format(type(processes)))
+
+    if processes is None or processes > 1:
+        # Use multiprocessing
+        pool = Pool(processes=processes)
+        map_func = pool.imap
+    else:
+        pool = None
+        map_func = map
+
+    return pool, map_func
+
+
+def stats_mode_scalar(a):
+    """Returns a scalar from scipy.stats.mode().
+
+    See https://docs.scipy.org/doc/scipy-1.9.3/reference/generated/scipy.stats.mode.html
+    """
+    try:
+        # scipy >= 1.11
+        return stats.mode(a, keepdims=False).mode
+    except TypeError:
+        # Old behavior (keepdims is not accepted)
+        return stats.mode(a).mode[0]

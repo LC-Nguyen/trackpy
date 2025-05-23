@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-import six
 import itertools
 
 import numpy as np
@@ -38,23 +35,27 @@ def coords_from_df(df, pos_columns, t_column):
     t_column to be of integer type. Float-typed integers are also accepted.
 
     Empty frames will be returned as empty arrays of shape (0, ndim)."""
+
+    # This implementation is much faster than using DataFrame.groupby.
+
     ndim = len(pos_columns)
-    grouped = iter(df.groupby(t_column))  # groupby sorts by default
+    times = df[t_column].values
+    pos = df[pos_columns].values
 
-    # get the first frame to learn first frame number
-    cur_frame, frame = next(grouped)
-    cur_frame = int(cur_frame)
-    yield cur_frame, frame[pos_columns].values
-    cur_frame += 1
+    idxs = np.argsort(times, kind="mergesort")  # i.e. stable
+    times = times[idxs]
+    pos = pos[idxs]
 
-    for frame_no, frame in grouped:
-        frame_no = int(frame_no)
-        while cur_frame < frame_no:
-            yield cur_frame, np.empty((0, ndim))
-            cur_frame += 1
+    unique_times, time_counts = np.unique(times, return_counts=True)
+    pos_by_frame = np.split(pos, np.cumsum(time_counts)[:-1])
 
-        yield cur_frame, frame[pos_columns].values
-        cur_frame += 1
+    idx = 0
+    for time in range(unique_times[0], unique_times[-1] + 1):
+        if time == unique_times[idx]:
+            yield time, pos_by_frame[idx]
+            idx += 1
+        else:
+            yield time, np.empty((0, ndim))
 
 
 def coords_from_df_iter(df_iter, pos_columns, t_column):
@@ -88,7 +89,7 @@ def verify_integrity(df):
                                   "label in Frames {}.".format(where_not_equal))
 
 
-class Point(object):
+class Point:
     '''
     Base class for point (features) used in tracking.  This class
     contains all of the general stuff for interacting with
@@ -167,7 +168,7 @@ class Point(object):
         return self._track
 
 
-class TrackUnstored(object):
+class TrackUnstored:
     """
     Base class for objects to represent linked tracks.
 
